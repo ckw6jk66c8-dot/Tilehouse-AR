@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>Tile House AR</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --orange:#e87722;--charcoal:#2b2f33;
+      --surface:rgba(28,32,36,0.93);--border:rgba(255,255,255,0.12);
+      --text:#f2f0ed;--muted:rgba(242,240,237,0.5);
+    }
+    html,body{width:100%;height:100%;background:#000;font-family:'Outfit',sans-serif;overflow:hidden;touch-action:none}
+
+    /* ── SPLASH ── */
+    #splash{
+      position:fixed;inset:0;z-index:100;background:var(--charcoal);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;
+    }
+    .splash-logo{display:flex;align-items:center;gap:14px;margin-bottom:28px}
+    .splash-name{font-size:28px;font-weight:600;color:var(--orange)}
+    .splash-tagline{font-size:11px;font-family:'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+    .splash-divider{width:100%;height:1px;background:var(--border);margin-bottom:28px}
+    .splash-title{font-size:22px;font-weight:500;text-align:center;color:var(--text);margin-bottom:8px;line-height:1.3}
+    .splash-sub{font-size:14px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:28px;max-width:280px}
+    .splash-steps{width:100%;max-width:300px;margin-bottom:32px;display:flex;flex-direction:column;gap:12px}
+    .step{display:flex;align-items:flex-start;gap:14px}
+    .step-num{width:28px;height:28px;border-radius:50%;background:var(--orange);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .step-text{font-size:14px;color:var(--text);line-height:1.5}
+    #start-btn{width:100%;max-width:300px;padding:16px;background:var(--orange);color:#fff;border:none;border-radius:10px;font-family:'Outfit',sans-serif;font-size:17px;font-weight:600;cursor:pointer}
+    #start-btn:active{opacity:.85}
+
+    /* ── CAMERA ── */
+    #camera-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+    #main-canvas{position:fixed;inset:0;width:100%;height:100%;display:none;touch-action:none}
+
+    /* ── UI ── */
+    #ui{position:fixed;inset:0;z-index:10;display:none;pointer-events:none}
+
+    .top-bar{
+      position:absolute;top:0;left:0;right:0;
+      padding:48px 18px 16px;
+      background:linear-gradient(to bottom,rgba(0,0,0,0.75) 0%,transparent 100%);
+      display:flex;align-items:center;justify-content:space-between;pointer-events:all;
+    }
+    .top-logo{display:flex;align-items:center;gap:8px}
+    .top-logo-name{font-size:16px;font-weight:600;color:var(--orange)}
+    #close-btn{width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.5);border:1px solid var(--border);color:var(--text);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;pointer-events:all}
+
+    /* Instruction banner */
+    #instruction{
+      position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:14px;padding:18px 22px;text-align:center;
+      pointer-events:none;max-width:260px;width:calc(100% - 48px);
+      transition:opacity .3s;
+    }
+    #instruction-icon{font-size:34px;margin-bottom:8px}
+    #instruction-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:4px}
+    #instruction-sub{font-size:13px;color:var(--muted);line-height:1.5}
+
+    /* Corner dots */
+    .corner-dot{
+      position:fixed;width:36px;height:36px;border-radius:50%;
+      background:var(--orange);border:3px solid #fff;
+      transform:translate(-50%,-50%);
+      display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:700;color:#fff;
+      box-shadow:0 2px 12px rgba(0,0,0,0.5);
+      pointer-events:none;z-index:20;
+      transition:transform .15s,background .15s;
+    }
+    .corner-dot.placed{background:var(--orange)}
+    .corner-dot.pending{background:rgba(232,119,34,0.5);border-color:rgba(255,255,255,0.5)}
+
+    /* Bottom panel */
+    .bottom-panel{
+      position:absolute;bottom:0;left:0;right:0;
+      background:linear-gradient(to top,rgba(0,0,0,0.88) 0%,transparent 100%);
+      padding:16px 18px 44px;pointer-events:all;
+    }
+    .panel-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .panel-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+    #recalibrate-btn{
+      padding:7px 14px;border-radius:20px;
+      background:rgba(255,255,255,0.1);border:1px solid var(--border);
+      color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;
+      cursor:pointer;pointer-events:all;
+    }
+    #recalibrate-btn:active{background:var(--orange);border-color:var(--orange)}
+
+    .tile-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+    .tile-scroll::-webkit-scrollbar{display:none}
+    .tile-chip{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;pointer-events:all}
+    .tile-swatch{width:54px;height:54px;border-radius:8px;border:2.5px solid transparent;transition:border-color .15s;overflow:hidden}
+    .tile-chip.active .tile-swatch{border-color:var(--orange)}
+    .tile-chip-label{font-size:10px;color:var(--muted);text-align:center;max-width:62px;line-height:1.3}
+
+    /* Screenshot */
+    #screenshot-btn{
+      position:absolute;bottom:160px;right:18px;
+      width:52px;height:52px;border-radius:50%;
+      background:var(--surface);border:1px solid var(--border);
+      color:var(--text);font-size:22px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      pointer-events:all;
+    }
+    #screenshot-btn:active{background:var(--orange)}
+
+    /* Progress dots */
+    #progress{
+      position:absolute;top:108px;left:50%;transform:translateX(-50%);
+      display:flex;gap:8px;align-items:center;pointer-events:none;
+    }
+    .prog-dot{
+      width:10px;height:10px;border-radius:50%;
+      background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.3);
+      transition:all .2s;
+    }
+    .prog-dot.done{background:var(--orange);border-color:var(--orange)}
+    .prog-dot.active{background:rgba(232,119,34,0.5);border-color:var(--orange);transform:scale(1.3)}
+
+    /* Toast */
+    #toast{
+      position:fixed;bottom:200px;left:50%;transform:translateX(-50%) translateY(10px);
+      background:var(--surface);border:1px solid var(--orange);border-radius:10px;
+      padding:12px 18px;font-size:14px;color:var(--text);z-index:200;
+      opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap;
+    }
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  </style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="splash-logo">
+    <svg width="48" height="48" viewBox="0 0 52 52" fill="none">
+      <polygon points="26,4 48,22 4,22" fill="#e87722"/>
+      <rect x="34" y="8" width="6" height="10" fill="#e87722"/>
+      <rect x="6" y="22" width="40" height="24" fill="#e87722"/>
+      <line x1="6" y1="33" x2="46" y2="33" stroke="#2b2f33" stroke-width="2.5"/>
+      <line x1="26" y1="22" x2="26" y2="46" stroke="#2b2f33" stroke-width="2.5"/>
+      <line x1="16" y1="22" x2="16" y2="33" stroke="#2b2f33" stroke-width="2"/>
+      <line x1="36" y1="33" x2="36" y2="46" stroke="#2b2f33" stroke-width="2"/>
+    </svg>
+    <div>
+      <div class="splash-name">Tile House</div>
+      <div class="splash-tagline">Tile &amp; Bathrooms</div>
+    </div>
+  </div>
+  <div class="splash-divider"></div>
+  <div class="splash-title">See tiles in your<br/>actual room</div>
+  <div class="splash-sub">Tap the corners of your floor or wall — tiles fill the exact space in real time.</div>
+  <div class="splash-steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text">Point camera at your floor or wall</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text">Tap each corner of the area — top-left, top-right, bottom-right, bottom-left</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text">Tiles fill the space. Swap styles instantly. Screenshot to save.</div></div>
+  </div>
+  <button id="start-btn">Open AR Camera →</button>
+</div>
+
+<!-- CAMERA -->
+<video id="camera-video" autoplay playsinline muted></video>
+<canvas id="main-canvas"></canvas>
+
+<!-- UI -->
+<div id="ui">
+  <div class="top-bar">
+    <div class="top-logo">
+      <svg width="26" height="26" viewBox="0 0 52 52" fill="none">
+        <polygon points="26,4 48,22 4,22" fill="#e87722"/>
+        <rect x="34" y="8" width="6" height="10" fill="#e87722"/>
+        <rect x="6" y="22" width="40" height="24" fill="#e87722"/>
+        <line x1="6" y1="33" x2="46" y2="33" stroke="#2b2f33" stroke-width="2.5"/>
+        <line x1="26" y1="22" x2="26" y2="46" stroke="#2b2f33" stroke-width="2.5"/>
+      </svg>
+      <span class="top-logo-name">Tile House AR</span>
+    </div>
+    <button id="close-btn">✕</button>
+  </div>
+
+  <!-- 4-dot progress indicator -->
+  <div id="progress">
+    <div class="prog-dot active" id="pd0"></div>
+    <div class="prog-dot" id="pd1"></div>
+    <div class="prog-dot" id="pd2"></div>
+    <div class="prog-dot" id="pd3"></div>
+  </div>
+
+  <!-- Instruction card -->
+  <div id="instruction">
+    <div id="instruction-icon">👆</div>
+    <div id="instruction-title">Tap corner 1 of 4</div>
+    <div id="instruction-sub">Top-left corner of your floor or wall area</div>
+  </div>
+
+  <button id="screenshot-btn">📸</button>
+
+  <div class="bottom-panel">
+    <div class="panel-row">
+      <div class="panel-label">Choose a tile</div>
+      <button id="recalibrate-btn">↺ Recalibrate</button>
+    </div>
+    <div class="tile-scroll" id="tile-scroll"></div>
+  </div>
+</div>
+
+<!-- Corner markers (injected by JS) -->
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// TILES
+// ═══════════════════════════════════════════════
+const TILES = [
+  { id:"concrete-grey",  label:"Grey Concrete", color:"#8a8f94", grout:"#5a5e62", gloss:0.3,  pattern:"grid",      size:0.6 },
+  { id:"calacatta",      label:"Calacatta",     color:"#f0ece4", grout:"#d4cfc8", gloss:0.7,  pattern:"marble",    size:0.6, veins:"#c8b89a" },
+  { id:"charcoal",       label:"Charcoal Slate",color:"#3d4045", grout:"#2a2d30", gloss:0.1,  pattern:"grid",      size:0.6 },
+  { id:"white-gloss",    label:"White Gloss",   color:"#f5f5f3", grout:"#dddbd8", gloss:0.9,  pattern:"brick",     size:0.3 },
+  { id:"terracotta",     label:"Terracotta",    color:"#c4714a", grout:"#8a4f34", gloss:0.15, pattern:"grid",      size:0.3 },
+  { id:"wood-oak",       label:"Oak Effect",    color:"#b8895a", grout:"#7a5c3a", gloss:0.2,  pattern:"plank",     size:0.2, grain:"#9a7248" },
+  { id:"encaustic",      label:"Encaustic",     color:"#e8e0d4", grout:"#c8c0b4", gloss:0.1,  pattern:"encaustic", size:0.2, accent:"#2d5a6b" },
+  { id:"nero-black",     label:"Nero Black",    color:"#1a1c1e", grout:"#111315", gloss:0.8,  pattern:"grid",      size:0.6 },
+];
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let activeTile = TILES[0];
+let corners    = [];        // up to 4 {x,y} screen points
+let calibrated = false;
+let cornerEls  = [];        // DOM elements for the 4 dots
+const CORNER_LABELS = ["TL","TR","BR","BL"];
+const CORNER_HINTS  = [
+  "Top-left corner",
+  "Top-right corner",
+  "Bottom-right corner",
+  "Bottom-left corner",
+];
+
+// ═══════════════════════════════════════════════
+// TILE PATTERN RENDERER
+// ═══════════════════════════════════════════════
+function drawTilePattern(ctx, tile, x, y, w, h, alpha){
+  const GROUT = 3;
+  const scale = Math.min(w,h);
+  const ts    = tile.size * (scale/1.2);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
+
+  function baseTile(tx,ty,tw,th){
+    ctx.fillStyle = tile.grout;
+    ctx.fillRect(tx,ty,tw,th);
+    ctx.fillStyle = tile.color;
+    ctx.fillRect(tx+GROUT, ty+GROUT, tw-GROUT*2, th-GROUT*2);
+    if(tile.gloss>0.3){
+      const g=ctx.createLinearGradient(tx,ty,tx+tw*.5,ty+th*.4);
+      g.addColorStop(0,`rgba(255,255,255,${tile.gloss*.22})`);
+      g.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle=g; ctx.fillRect(tx+GROUT,ty+GROUT,tw-GROUT*2,th-GROUT*2);
+    }
+  }
+
+  if(tile.pattern==="grid"||tile.pattern==="marble"){
+    const cols=Math.ceil(w/ts)+1, rows=Math.ceil(h/ts)+1;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      baseTile(x+c*ts, y+r*ts, ts, ts);
+      if(tile.veins){
+        const tx2=x+c*ts, ty2=y+r*ts;
+        ctx.strokeStyle=tile.veins; ctx.lineWidth=1;
+        ctx.globalAlpha=alpha*.35;
+        ctx.beginPath();
+        ctx.moveTo(tx2+ts*.1, ty2+ts*.2);
+        ctx.bezierCurveTo(tx2+ts*.4,ty2+ts*.5,tx2+ts*.6,ty2+ts*.3,tx2+ts*.9,ty2+ts*.85);
+        ctx.stroke(); ctx.globalAlpha=alpha;
+      }
+    }
+  } else if(tile.pattern==="brick"){
+    const bw=ts*2, bh=ts;
+    const rows=Math.ceil(h/bh)+1, cols=Math.ceil(w/bw)+2;
+    for(let r=0;r<rows;r++) for(let c=-1;c<cols;c++)
+      baseTile(x+c*bw-(r%2?bw/2:0), y+r*bh, bw, bh);
+  } else if(tile.pattern==="plank"){
+    const pw=ts*4, ph=ts;
+    const rows=Math.ceil(h/ph)+1, cols=Math.ceil(w/pw)+2;
+    for(let r=0;r<rows;r++) for(let c=-1;c<cols;c++){
+      const ox=r%3*(pw/3);
+      baseTile(x+c*pw-ox, y+r*ph, pw, ph);
+    }
+  } else if(tile.pattern==="encaustic"){
+    const cols=Math.ceil(w/ts)+1, rows=Math.ceil(h/ts)+1;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      baseTile(x+c*ts, y+r*ts, ts, ts);
+      if(tile.accent){
+        ctx.fillStyle=tile.accent; ctx.globalAlpha=alpha*.6;
+        ctx.beginPath();
+        ctx.arc(x+c*ts+ts/2, y+r*ts+ts/2, ts*.22, 0, Math.PI*2);
+        ctx.fill(); ctx.globalAlpha=alpha;
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PERSPECTIVE TRANSFORM (4-point homography → canvas drawImage path)
+// Maps a tile-textured offscreen canvas onto any quadrilateral
+// using triangulation (two triangles per quad)
+// ═══════════════════════════════════════════════════════════════════
+function drawPerspectiveTile(ctx, tile, pts){
+  // pts = [{x,y}, {x,y}, {x,y}, {x,y}]  TL TR BR BL
+  // Generate tile texture on offscreen canvas
+  const SIZE = 512;
+  const oc   = new OffscreenCanvas(SIZE, SIZE);
+  const octx = oc.getContext("2d");
+  drawTilePattern(octx, tile, 0, 0, SIZE, SIZE, 1.0);
+
+  // We map the quad using 2 triangles with ctx transform
+  // Triangle 1: TL TR BL  → texture coords (0,0)(1,0)(0,1)
+  // Triangle 2: TR BR BL  → texture coords (1,0)(1,1)(0,1)
+  drawTexturedTriangle(ctx, oc, SIZE,
+    pts[0], pts[1], pts[3],   // screen
+    {u:0,v:0}, {u:1,v:0}, {u:0,v:1}  // uv
+  );
+  drawTexturedTriangle(ctx, oc, SIZE,
+    pts[1], pts[2], pts[3],
+    {u:1,v:0}, {u:1,v:1}, {u:0,v:1}
+  );
+}
+
+function drawTexturedTriangle(ctx, img, imgSize, p0, p1, p2, uv0, uv1, uv2){
+  // Compute affine transform mapping uv → screen
+  // | u0 u1 u2 |   | a c e |   | x0 x1 x2 |
+  // | v0 v1 v2 | × | b d f | = | y0 y1 y2 |
+  // | 1  1  1  |               | 1  1  1  |
+  const x0=p0.x, y0=p0.y, x1=p1.x, y1=p1.y, x2=p2.x, y2=p2.y;
+  const u0=uv0.u*imgSize, v0=uv0.v*imgSize;
+  const u1=uv1.u*imgSize, v1=uv1.v*imgSize;
+  const u2=uv2.u*imgSize, v2=uv2.v*imgSize;
+
+  const det = u0*(v1-v2) + u1*(v2-v0) + u2*(v0-v1);
+  if(Math.abs(det)<1e-6) return;
+
+  const a = (x0*(v1-v2) + x1*(v2-v0) + x2*(v0-v1)) / det;
+  const b = (y0*(v1-v2) + y1*(v2-v0) + y2*(v0-v1)) / det;
+  const c = (u0*(x2-x1) + u1*(x0-x2) + u2*(x1-x0)) / det;
+  const d = (u0*(y2-y1) + u1*(y0-y2) + u2*(y1-y0)) / det;
+  const e = (u0*(v2*x1-v1*x2) + u1*(v0*x2-v2*x0) + u2*(v1*x0-v0*x1)) / det;
+  const f = (u0*(v2*y1-v1*y2) + u1*(v0*y2-v2*y0) + u2*(v1*y0-v0*y1)) / det;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2);
+  ctx.closePath(); ctx.clip();
+  ctx.transform(a,b,c,d,e,f);
+  ctx.drawImage(img, 0,0);
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════
+// SWATCHES
+// ═══════════════════════════════════════════════
+function buildSwatches(){
+  const scroll = document.getElementById("tile-scroll");
+  scroll.innerHTML = "";
+  TILES.forEach(tile=>{
+    const chip = document.createElement("div");
+    chip.className = "tile-chip" + (tile.id===activeTile.id?" active":"");
+    chip.dataset.id = tile.id;
+    const sw = document.createElement("canvas");
+    sw.className = "tile-swatch"; sw.width=54; sw.height=54;
+    drawTilePattern(sw.getContext("2d"), tile, 0,0,54,54, 1.0);
+    const lbl = document.createElement("div");
+    lbl.className = "tile-chip-label"; lbl.textContent = tile.label;
+    chip.appendChild(sw); chip.appendChild(lbl);
+    chip.addEventListener("click",()=>{
+      activeTile = tile;
+      document.querySelectorAll(".tile-chip").forEach(c=>c.classList.toggle("active",c.dataset.id===tile.id));
+      render();
+    });
+    scroll.appendChild(chip);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// CORNER DOT ELEMENTS
+// ═══════════════════════════════════════════════
+function createCornerDots(){
+  cornerEls.forEach(el=>el.remove());
+  cornerEls = [];
+  for(let i=0;i<4;i++){
+    const el = document.createElement("div");
+    el.className = "corner-dot pending";
+    el.textContent = (i+1).toString();
+    el.style.display = "none";
+    document.body.appendChild(el);
+    cornerEls.push(el);
+  }
+}
+
+function updateCornerDots(){
+  corners.forEach((pt,i)=>{
+    const el = cornerEls[i];
+    el.style.display = "flex";
+    el.style.left = pt.x+"px";
+    el.style.top  = pt.y+"px";
+    el.classList.remove("pending");
+    el.classList.add("placed");
+  });
+}
+
+function updateProgress(){
+  for(let i=0;i<4;i++){
+    const dot = document.getElementById("pd"+i);
+    if(i < corners.length) dot.className="prog-dot done";
+    else if(i===corners.length) dot.className="prog-dot active";
+    else dot.className="prog-dot";
+  }
+}
+
+function updateInstruction(){
+  const icon  = document.getElementById("instruction-icon");
+  const title = document.getElementById("instruction-title");
+  const sub   = document.getElementById("instruction-sub");
+  const box   = document.getElementById("instruction");
+
+  if(calibrated){
+    box.style.opacity="0";
+    setTimeout(()=>box.style.display="none",300);
+    return;
+  }
+  const n = corners.length;
+  icon.textContent  = n===0?"👆":n===1?"↗️":n===2?"↙️":"✅";
+  title.textContent = `Tap corner ${n+1} of 4`;
+  sub.textContent   = CORNER_HINTS[n];
+}
+
+// ═══════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════
+const canvas = document.getElementById("main-canvas");
+const ctx    = canvas.getContext("2d");
+const video  = document.getElementById("camera-video");
+
+function render(){
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(!calibrated) {
+    // Draw partial polygon outline as corners are placed
+    if(corners.length>1){
+      ctx.beginPath();
+      ctx.moveTo(corners[0].x, corners[0].y);
+      for(let i=1;i<corners.length;i++) ctx.lineTo(corners[i].x, corners[i].y);
+      ctx.strokeStyle="rgba(232,119,34,0.8)";
+      ctx.lineWidth=2;
+      ctx.setLineDash([8,5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // Crosshair on each placed corner
+    corners.forEach(pt=>{
+      ctx.beginPath();
+      ctx.arc(pt.x,pt.y,18,0,Math.PI*2);
+      ctx.strokeStyle="rgba(232,119,34,0.9)";
+      ctx.lineWidth=2.5;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(pt.x,pt.y,4,0,Math.PI*2);
+      ctx.fillStyle="#e87722";
+      ctx.fill();
+    });
+    return;
+  }
+
+  // ── Calibrated — draw perspective tile ──────────
+  drawPerspectiveTile(ctx, activeTile, corners);
+
+  // Edge glow
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x,corners[0].y);
+  corners.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.closePath();
+  ctx.strokeStyle="rgba(232,119,34,0.55)";
+  ctx.lineWidth=2;
+  ctx.stroke();
+
+  // Draggable corner handles (small)
+  corners.forEach((pt,i)=>{
+    ctx.beginPath();
+    ctx.arc(pt.x,pt.y,10,0,Math.PI*2);
+    ctx.fillStyle="rgba(232,119,34,0.9)";
+    ctx.fill();
+    ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// TOUCH — place corners, then drag to adjust
+// ═══════════════════════════════════════════════
+let draggingCorner = -1;
+
+canvas.addEventListener("pointerdown", e=>{
+  const pt = {x:e.clientX, y:e.clientY};
+
+  if(calibrated){
+    // Check if tapping near a corner handle to drag it
+    for(let i=0;i<4;i++){
+      const d = Math.hypot(corners[i].x-pt.x, corners[i].y-pt.y);
+      if(d<30){ draggingCorner=i; return; }
+    }
+    return;
+  }
+
+  // Calibration phase — add corners
+  if(corners.length<4){
+    corners.push(pt);
+    updateCornerDots();
+    updateProgress();
+    updateInstruction();
+
+    if(corners.length===4){
+      calibrated = true;
+      updateInstruction();
+      showToast("✓ Calibrated — swap tiles below");
+      document.getElementById("recalibrate-btn").style.display="block";
+    }
+    render();
+  }
+});
+
+canvas.addEventListener("pointermove", e=>{
+  if(draggingCorner<0) return;
+  corners[draggingCorner] = {x:e.clientX, y:e.clientY};
+  cornerEls[draggingCorner].style.left = e.clientX+"px";
+  cornerEls[draggingCorner].style.top  = e.clientY+"px";
+  render();
+});
+
+canvas.addEventListener("pointerup", ()=>{ draggingCorner=-1; });
+
+// ═══════════════════════════════════════════════
+// RECALIBRATE
+// ═══════════════════════════════════════════════
+function resetCalibration(){
+  corners     = [];
+  calibrated  = false;
+  draggingCorner = -1;
+  cornerEls.forEach(el=>{ el.style.display="none"; el.classList.add("pending"); el.classList.remove("placed"); });
+  updateProgress();
+  updateInstruction();
+  document.getElementById("instruction").style.opacity="1";
+  document.getElementById("instruction").style.display="block";
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+document.getElementById("recalibrate-btn").addEventListener("click", resetCalibration);
+
+// ═══════════════════════════════════════════════
+// SCREENSHOT
+// ═══════════════════════════════════════════════
+document.getElementById("screenshot-btn").addEventListener("click",()=>{
+  const composite = document.createElement("canvas");
+  composite.width  = window.innerWidth;
+  composite.height = window.innerHeight;
+  const cctx = composite.getContext("2d");
+  cctx.drawImage(video,0,0,composite.width,composite.height);
+  cctx.drawImage(canvas,0,0);
+  composite.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement("a");
+    a.href=url; a.download="tilehouse-ar-"+Date.now()+".jpg"; a.click();
+    URL.revokeObjectURL(url);
+    showToast("📸 Saved!");
+  },"image/jpeg",0.94);
+});
+
+// ═══════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════
+document.getElementById("start-btn").addEventListener("click", async()=>{
+  document.getElementById("splash").style.display="none";
+  document.getElementById("ui").style.display="block";
+  video.style.display="block";
+  canvas.style.display="block";
+  buildSwatches();
+  createCornerDots();
+  updateInstruction();
+
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:"environment", width:{ideal:1920}, height:{ideal:1080}},
+      audio:false
+    });
+    video.srcObject = stream;
+    await video.play();
+  } catch(e){
+    showToast("Camera access denied — please allow and reload");
+    return;
+  }
+
+  // Keep canvas sized to window
+  function resize(){
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    render();
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // Continuous render loop (keeps video visible under canvas)
+  function loop(){ render(); requestAnimationFrame(loop); }
+  loop();
+});
+
+document.getElementById("close-btn").addEventListener("click",()=>location.reload());
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2800);
+}
+</script>
+</body>
+</html>
