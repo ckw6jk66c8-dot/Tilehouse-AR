@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>Tile House AR</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --orange:#e87722;--charcoal:#2b2f33;
+      --surface:rgba(28,32,36,0.95);--border:rgba(255,255,255,0.12);
+      --text:#f2f0ed;--muted:rgba(242,240,237,0.5);
+    }
+    html,body{width:100%;height:100%;background:#000;font-family:'Outfit',sans-serif;overflow:hidden;touch-action:none}
+
+    /* SPLASH */
+    #splash{position:fixed;inset:0;z-index:100;background:var(--charcoal);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:36px 28px;overflow-y:auto}
+    .splash-logo{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+    .splash-name{font-size:26px;font-weight:600;color:var(--orange)}
+    .splash-tagline{font-size:11px;font-family:'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+    .splash-divider{width:100%;height:1px;background:var(--border);margin-bottom:24px}
+    .splash-title{font-size:21px;font-weight:500;text-align:center;color:var(--text);margin-bottom:8px;line-height:1.3}
+    .splash-sub{font-size:14px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:24px;max-width:280px}
+    .splash-steps{width:100%;max-width:300px;margin-bottom:28px;display:flex;flex-direction:column;gap:11px}
+    .step{display:flex;align-items:flex-start;gap:12px}
+    .step-num{width:26px;height:26px;border-radius:50%;background:var(--orange);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .step-text{font-size:13px;color:var(--text);line-height:1.5}
+    #start-btn{width:100%;max-width:300px;padding:15px;background:var(--orange);color:#fff;border:none;border-radius:10px;font-family:'Outfit',sans-serif;font-size:16px;font-weight:600;cursor:pointer}
+
+    /* CAMERA */
+    #camera-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+    #main-canvas{position:fixed;inset:0;width:100%;height:100%;display:none;touch-action:none}
+
+    /* UI */
+    #ui{position:fixed;inset:0;z-index:10;display:none;pointer-events:none}
+
+    .top-bar{position:absolute;top:0;left:0;right:0;padding:46px 16px 14px;background:linear-gradient(to bottom,rgba(0,0,0,0.8) 0%,transparent 100%);display:flex;align-items:center;justify-content:space-between;pointer-events:all}
+    .top-logo{display:flex;align-items:center;gap:8px}
+    .top-logo-name{font-size:15px;font-weight:600;color:var(--orange)}
+    #close-btn{width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.5);border:1px solid var(--border);color:var(--text);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;pointer-events:all}
+
+    /* Instruction */
+    #instruction{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 20px;text-align:center;pointer-events:none;max-width:250px;width:calc(100% - 48px);transition:opacity .3s}
+    #instruction-icon{font-size:30px;margin-bottom:6px}
+    #instruction-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px}
+    #instruction-sub{font-size:12px;color:var(--muted);line-height:1.5}
+
+    /* Progress */
+    #progress{position:absolute;top:102px;left:50%;transform:translateX(-50%);display:flex;gap:7px;align-items:center;pointer-events:none}
+    .prog-dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.3);transition:all .2s}
+    .prog-dot.done{background:var(--orange);border-color:var(--orange)}
+    .prog-dot.active{background:rgba(232,119,34,0.5);border-color:var(--orange);transform:scale(1.3)}
+
+    /* Mode tabs */
+    #mode-tabs{position:absolute;top:96px;left:16px;right:16px;display:flex;gap:6px;pointer-events:all;justify-content:center}
+    .mode-tab{padding:7px 14px;border-radius:20px;background:rgba(0,0,0,0.5);border:1px solid var(--border);color:var(--muted);font-family:'Outfit',sans-serif;font-size:12px;cursor:pointer;transition:all .15s;pointer-events:all;white-space:nowrap}
+    .mode-tab.active{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:600}
+
+    /* Layers panel */
+    #layers-panel{position:absolute;top:140px;right:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;pointer-events:all;min-width:110px}
+    .layer-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.05);cursor:pointer}
+    .layer-item.active-layer{background:rgba(232,119,34,0.15);border:1px solid rgba(232,119,34,0.3)}
+    .layer-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .layer-name{font-size:11px;color:var(--text);flex:1}
+    .layer-del{font-size:11px;color:var(--muted);padding:2px 4px;cursor:pointer}
+    #add-layer-btn{padding:6px;border-radius:8px;background:rgba(232,119,34,0.15);border:1px dashed rgba(232,119,34,0.4);color:var(--orange);font-size:11px;text-align:center;cursor:pointer}
+
+    /* Bottom panel */
+    .bottom-panel{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,0.9) 0%,transparent 100%);padding:14px 16px 42px;pointer-events:all}
+    .panel-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px}
+    .panel-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);flex-shrink:0}
+    .panel-actions{display:flex;gap:6px}
+    .action-btn{padding:6px 12px;border-radius:16px;background:rgba(255,255,255,0.1);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;cursor:pointer}
+    .action-btn:active{background:var(--orange);border-color:var(--orange)}
+
+    .tile-scroll{display:flex;gap:9px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+    .tile-scroll::-webkit-scrollbar{display:none}
+    .tile-chip{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;pointer-events:all}
+    .tile-swatch{width:50px;height:50px;border-radius:7px;border:2.5px solid transparent;transition:border-color .15s;overflow:hidden;background:#333}
+    .tile-chip.active .tile-swatch{border-color:var(--orange)}
+    .tile-chip-label{font-size:9px;color:var(--muted);text-align:center;max-width:58px;line-height:1.3}
+
+    /* Fixture chips */
+    .fixture-scroll{display:flex;gap:9px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+    .fixture-scroll::-webkit-scrollbar{display:none}
+    .fixture-chip{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;pointer-events:all}
+    .fixture-icon-wrap{width:62px;height:62px;border-radius:10px;background:rgba(255,255,255,0.08);border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:border-color .15s}
+    .fixture-chip.active .fixture-icon-wrap{border-color:var(--orange)}
+    .fixture-icon{font-size:26px}
+    .fixture-price{font-size:9px;color:var(--orange);font-family:'DM Mono',monospace}
+    .fixture-chip-label{font-size:9px;color:var(--muted);text-align:center;max-width:66px;line-height:1.3}
+
+    #screenshot-btn{position:absolute;bottom:168px;right:14px;width:48px;height:48px;border-radius:50%;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;pointer-events:all}
+    #screenshot-btn:active{background:var(--orange)}
+
+    /* Corner dots */
+    .corner-dot{position:fixed;width:34px;height:34px;border-radius:50%;background:var(--orange);border:2.5px solid #fff;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.5);pointer-events:none;z-index:20}
+
+    /* Fixture placed label */
+    .fixture-label-el{position:fixed;background:var(--surface);border:1px solid var(--orange);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--orange);pointer-events:none;z-index:20;transform:translate(-50%,-100%);white-space:nowrap}
+
+    #toast{position:fixed;bottom:190px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--surface);border:1px solid var(--orange);border-radius:10px;padding:11px 16px;font-size:13px;color:var(--text);z-index:200;opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+    /* Basket */
+    #basket-btn{position:absolute;top:46px;right:56px;background:var(--orange);border:none;border-radius:20px;padding:6px 12px;color:#fff;font-size:12px;font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;pointer-events:all;display:none}
+  </style>
+</head>
+<body>
+
+<div id="splash">
+  <div class="splash-logo">
+    <svg width="44" height="44" viewBox="0 0 52 52" fill="none">
+      <polygon points="26,4 48,22 4,22" fill="#e87722"/>
+      <rect x="34" y="8" width="6" height="10" fill="#e87722"/>
+      <rect x="6" y="22" width="40" height="24" fill="#e87722"/>
+      <line x1="6" y1="33" x2="46" y2="33" stroke="#2b2f33" stroke-width="2.5"/>
+      <line x1="26" y1="22" x2="26" y2="46" stroke="#2b2f33" stroke-width="2.5"/>
+      <line x1="16" y1="22" x2="16" y2="33" stroke="#2b2f33" stroke-width="2"/>
+      <line x1="36" y1="33" x2="36" y2="46" stroke="#2b2f33" stroke-width="2"/>
+    </svg>
+    <div><div class="splash-name">Tile House</div><div class="splash-tagline">Living Brochure</div></div>
+  </div>
+  <div class="splash-divider"></div>
+  <div class="splash-title">Design your bathroom<br/>in your actual room</div>
+  <div class="splash-sub">Tap 4 corners to calibrate any surface, then layer tiles, baths, sinks and more.</div>
+  <div class="splash-steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text">Point camera at your floor or wall</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text">Tap 4 corners of the area to calibrate</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text">Add tiles, fixtures & fittings in layers</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-text">Screenshot your design & bring to the counter</div></div>
+  </div>
+  <button id="start-btn">Open Living Brochure →</button>
+</div>
+
+<video id="camera-video" autoplay playsinline muted></video>
+<canvas id="main-canvas"></canvas>
+
+<div id="ui">
+  <div class="top-bar">
+    <div class="top-logo">
+      <svg width="24" height="24" viewBox="0 0 52 52" fill="none">
+        <polygon points="26,4 48,22 4,22" fill="#e87722"/>
+        <rect x="34" y="8" width="6" height="10" fill="#e87722"/>
+        <rect x="6" y="22" width="40" height="24" fill="#e87722"/>
+        <line x1="6" y1="33" x2="46" y2="33" stroke="#2b2f33" stroke-width="2.5"/>
+        <line x1="26" y1="22" x2="26" y2="46" stroke="#2b2f33" stroke-width="2.5"/>
+      </svg>
+      <span class="top-logo-name">Tile House AR</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="basket-btn">🛒 <span id="basket-count">0</span> items</button>
+      <button id="close-btn">✕</button>
+    </div>
+  </div>
+
+  <!-- Mode tabs -->
+  <div id="mode-tabs">
+    <button class="mode-tab active" data-mode="tiles">🟫 Tiles</button>
+    <button class="mode-tab" data-mode="fixtures">🛁 Fixtures</button>
+    <button class="mode-tab" data-mode="layers">⬚ Layers</button>
+  </div>
+
+  <!-- Progress (shown during calibration) -->
+  <div id="progress" style="display:none">
+    <div class="prog-dot active" id="pd0"></div>
+    <div class="prog-dot" id="pd1"></div>
+    <div class="prog-dot" id="pd2"></div>
+    <div class="prog-dot" id="pd3"></div>
+  </div>
+
+  <!-- Instruction card -->
+  <div id="instruction">
+    <div id="instruction-icon">👆</div>
+    <div id="instruction-title">Tap corner 1 of 4</div>
+    <div id="instruction-sub">Top-left corner of your surface</div>
+  </div>
+
+  <!-- Layers panel (shown in layers mode) -->
+  <div id="layers-panel" style="display:none">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Layers</div>
+    <div id="layers-list"></div>
+    <div id="add-layer-btn">+ New surface</div>
+  </div>
+
+  <button id="screenshot-btn">📸</button>
+
+  <div class="bottom-panel" id="bottom-panel">
+    <!-- Tiles mode -->
+    <div id="tiles-panel">
+      <div class="panel-row">
+        <div class="panel-label">Tile style</div>
+        <div class="panel-actions">
+          <button class="action-btn" id="recalibrate-btn">↺ Redo</button>
+          <button class="action-btn" id="add-to-basket-tile">+ Basket</button>
+        </div>
+      </div>
+      <div class="tile-scroll" id="tile-scroll"></div>
+    </div>
+
+    <!-- Fixtures mode -->
+    <div id="fixtures-panel" style="display:none">
+      <div class="panel-row">
+        <div class="panel-label">Tap to place</div>
+        <div class="panel-actions">
+          <button class="action-btn" id="add-to-basket-fixture">+ Basket</button>
+        </div>
+      </div>
+      <div class="fixture-scroll" id="fixture-scroll"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════
+const TILES = [
+  {id:"concrete-grey",  label:"Grey Concrete", color:"#8a8f94",grout:"#5a5e62",gloss:.3, pattern:"grid",   tileSize:.6},
+  {id:"calacatta",      label:"Calacatta",     color:"#f0ece4",grout:"#d4cfc8",gloss:.7, pattern:"marble", tileSize:.6,veins:"#c8b89a"},
+  {id:"charcoal",       label:"Charcoal",      color:"#3d4045",grout:"#2a2d30",gloss:.1, pattern:"grid",   tileSize:.6},
+  {id:"white-gloss",    label:"White Gloss",   color:"#f5f5f3",grout:"#dddbd8",gloss:.9, pattern:"brick",  tileSize:.3},
+  {id:"terracotta",     label:"Terracotta",    color:"#c4714a",grout:"#8a4f34",gloss:.15,pattern:"grid",   tileSize:.3},
+  {id:"wood-oak",       label:"Oak Effect",    color:"#b8895a",grout:"#7a5c3a",gloss:.2, pattern:"plank",  tileSize:.2,grain:"#9a7248"},
+  {id:"encaustic",      label:"Encaustic",     color:"#e8e0d4",grout:"#c8c0b4",gloss:.1, pattern:"encaustic",tileSize:.2,accent:"#2d5a6b"},
+  {id:"nero-black",     label:"Nero Black",    color:"#1a1c1e",grout:"#111315",gloss:.8, pattern:"grid",   tileSize:.6},
+  {id:"blush-pink",     label:"Blush Pink",    color:"#e8c4b8",grout:"#c4a098",gloss:.6, pattern:"brick",  tileSize:.3},
+  {id:"sage-green",     label:"Sage Green",    color:"#8fab96",grout:"#6a8a74",gloss:.4, pattern:"grid",   tileSize:.3},
+];
+
+const FIXTURES = [
+  {id:"bath",      label:"Freestanding Bath", icon:"🛁", price:"£599",  color:"#f0f0ee", desc:"Double ended acrylic, 1700mm"},
+  {id:"shower",    label:"Walk-in Shower",    icon:"🚿", price:"£349",  color:"#c8e0f0", desc:"8mm glass panel, chrome"},
+  {id:"sink",      label:"Basin Sink",        icon:"🪣", price:"£189",  color:"#f0f0ee", desc:"Wall-hung ceramic, 500mm"},
+  {id:"toilet",    label:"Close-coupled WC",  icon:"🚽", price:"£249",  color:"#f0f0ee", desc:"Soft-close, dual flush"},
+  {id:"radiator",  label:"Towel Radiator",    icon:"🔆", price:"£129",  color:"#c8c8c8", desc:"Chrome ladder, 1200mm"},
+  {id:"vanity",    label:"Vanity Unit",       icon:"🪞", price:"£449",  color:"#8a6a4a", desc:"600mm with mirror cabinet"},
+  {id:"heated",    label:"Underfloor Heat",   icon:"♨️", price:"£299",  color:"#e87722", desc:"Electric mat, per m²"},
+];
+
+// Layer colours
+const LAYER_COLORS = ["#e87722","#7eb8a4","#c9a96e","#9b8ab8","#e07070","#6abf8a"];
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let mode          = "tiles";      // tiles | fixtures | layers
+let activeTile    = TILES[0];
+let activeFixture = FIXTURES[0];
+let basket        = [];
+
+// Layers: each layer has its own calibrated surface + chosen tile
+let layers        = [];           // [{id, name, color, corners:[], tile, cornerEls:[]}]
+let activeLayerId = null;
+
+// Fixtures placed on screen
+let placedFixtures = [];          // [{fixture, x, y, scale, el, labelEl}]
+
+// Calibration state for current layer being built
+let calibrating   = false;
+let calCorners    = [];           // temp corners while calibrating
+let calCornerEls  = [];
+
+let draggingCorner = {layerId:null, idx:-1};
+let draggingFixture = null;       // index into placedFixtures
+
+// ═══════════════════════════════════════════
+// TILE TEXTURE — draw to a regular canvas
+// iOS-safe: no OffscreenCanvas
+// ═══════════════════════════════════════════
+function makeTileCanvas(tile, size){
+  const c   = document.createElement("canvas");
+  c.width   = size; c.height = size;
+  drawTilePattern(c.getContext("2d"), tile, 0, 0, size, size, 1.0);
+  return c;
+}
+
+function drawTilePattern(ctx, tile, x, y, w, h, alpha){
+  const GROUT = 3;
+  const ts    = tile.tileSize * (Math.min(w,h) / 1.2);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
+
+  function base(tx,ty,tw,th){
+    ctx.fillStyle = tile.grout; ctx.fillRect(tx,ty,tw,th);
+    ctx.fillStyle = tile.color; ctx.fillRect(tx+GROUT,ty+GROUT,tw-GROUT*2,th-GROUT*2);
+    if(tile.gloss>.3){
+      const g=ctx.createLinearGradient(tx,ty,tx+tw*.5,ty+th*.4);
+      g.addColorStop(0,`rgba(255,255,255,${tile.gloss*.22})`);
+      g.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle=g; ctx.fillRect(tx+GROUT,ty+GROUT,tw-GROUT*2,th-GROUT*2);
+    }
+  }
+
+  if(tile.pattern==="grid"||tile.pattern==="marble"){
+    const cols=Math.ceil(w/ts)+2, rows=Math.ceil(h/ts)+2;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      base(x+c*ts, y+r*ts, ts, ts);
+      if(tile.veins){
+        ctx.strokeStyle=tile.veins; ctx.lineWidth=1.2;
+        ctx.globalAlpha=alpha*.3;
+        ctx.beginPath();
+        ctx.moveTo(x+c*ts+ts*.1, y+r*ts+ts*.2);
+        ctx.bezierCurveTo(x+c*ts+ts*.4,y+r*ts+ts*.5,x+c*ts+ts*.6,y+r*ts+ts*.3,x+c*ts+ts*.95,y+r*ts+ts*.9);
+        ctx.stroke(); ctx.globalAlpha=alpha;
+      }
+    }
+  } else if(tile.pattern==="brick"){
+    const bw=ts*2,bh=ts,rows=Math.ceil(h/bh)+2,cols=Math.ceil(w/bw)+3;
+    for(let r=0;r<rows;r++) for(let c=-1;c<cols;c++) base(x+c*bw-(r%2?bw/2:0),y+r*bh,bw,bh);
+  } else if(tile.pattern==="plank"){
+    const pw=ts*4,ph=ts,rows=Math.ceil(h/ph)+2,cols=Math.ceil(w/pw)+3;
+    for(let r=0;r<rows;r++) for(let c=-1;c<cols;c++) base(x+c*pw-(r%3)*(pw/3),y+r*ph,pw,ph);
+  } else if(tile.pattern==="encaustic"){
+    const cols=Math.ceil(w/ts)+2,rows=Math.ceil(h/ts)+2;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      base(x+c*ts,y+r*ts,ts,ts);
+      if(tile.accent){
+        ctx.fillStyle=tile.accent; ctx.globalAlpha=alpha*.55;
+        ctx.beginPath(); ctx.arc(x+c*ts+ts/2,y+r*ts+ts/2,ts*.2,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha=alpha;
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════
+// PERSPECTIVE DRAW — using regular canvas
+// ═══════════════════════════════════════════
+function drawPerspective(ctx, tileCanvas, pts){
+  // pts: TL TR BR BL
+  tri(ctx, tileCanvas, pts[0],pts[1],pts[3], {u:0,v:0},{u:1,v:0},{u:0,v:1});
+  tri(ctx, tileCanvas, pts[1],pts[2],pts[3], {u:1,v:0},{u:1,v:1},{u:0,v:1});
+}
+
+function tri(ctx, img, p0,p1,p2, uv0,uv1,uv2){
+  const W=img.width, H=img.height;
+  const x0=p0.x,y0=p0.y, x1=p1.x,y1=p1.y, x2=p2.x,y2=p2.y;
+  const u0=uv0.u*W, v0=uv0.v*H;
+  const u1=uv1.u*W, v1=uv1.v*H;
+  const u2=uv2.u*W, v2=uv2.v*H;
+  const det=u0*(v1-v2)+u1*(v2-v0)+u2*(v0-v1);
+  if(Math.abs(det)<1e-6) return;
+  const a=(x0*(v1-v2)+x1*(v2-v0)+x2*(v0-v1))/det;
+  const b=(y0*(v1-v2)+y1*(v2-v0)+y2*(v0-v1))/det;
+  const c=(u0*(x2-x1)+u1*(x0-x2)+u2*(x1-x0))/det;
+  const d=(u0*(y2-y1)+u1*(y0-y2)+u2*(y1-y0))/det;
+  const e=(u0*(v2*x1-v1*x2)+u1*(v0*x2-v2*x0)+u2*(v1*x0-v0*x1))/det;
+  const f=(u0*(v2*y1-v1*y2)+u1*(v0*y2-v2*y0)+u2*(v1*y0-v0*y1))/det;
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.closePath(); ctx.clip();
+  ctx.transform(a,b,c,d,e,f);
+  ctx.drawImage(img,0,0);
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════
+// FIXTURE EMOJI RENDERER
+// ═══════════════════════════════════════════
+function drawFixtures(ctx){
+  placedFixtures.forEach((pf,i)=>{
+    const s = pf.scale || 80;
+    ctx.save();
+    ctx.font = `${s}px serif`;
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.globalAlpha = 0.92;
+    ctx.fillText(pf.fixture.icon, pf.x, pf.y);
+    // Subtle shadow
+    ctx.globalAlpha=.18;
+    ctx.fillStyle="#000";
+    ctx.beginPath(); ctx.ellipse(pf.x, pf.y+s*.45, s*.35, s*.1, 0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+// ═══════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════
+const canvas = document.getElementById("main-canvas");
+const ctx    = canvas.getContext("2d");
+const video  = document.getElementById("camera-video");
+
+function render(){
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Draw each calibrated layer
+  layers.forEach(layer=>{
+    if(layer.corners.length<4) return;
+    const tc = makeTileCanvas(layer.tile, 512);
+    drawPerspective(ctx, tc, layer.corners);
+    // Edge
+    ctx.beginPath();
+    layer.corners.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    ctx.closePath();
+    ctx.strokeStyle = layer.id===activeLayerId
+      ? "rgba(232,119,34,0.7)" : "rgba(255,255,255,0.2)";
+    ctx.lineWidth=2; ctx.stroke();
+    // Corner handles
+    layer.corners.forEach((pt,i)=>{
+      ctx.beginPath(); ctx.arc(pt.x,pt.y,10,0,Math.PI*2);
+      ctx.fillStyle = layer.id===activeLayerId?"rgba(232,119,34,0.9)":"rgba(255,255,255,0.4)";
+      ctx.fill();
+      ctx.strokeStyle="#fff"; ctx.lineWidth=1.5; ctx.stroke();
+    });
+  });
+
+  // Draw calibration in-progress
+  if(calibrating && calCorners.length>0){
+    if(calCorners.length>1){
+      ctx.beginPath(); ctx.moveTo(calCorners[0].x,calCorners[0].y);
+      for(let i=1;i<calCorners.length;i++) ctx.lineTo(calCorners[i].x,calCorners[i].y);
+      ctx.strokeStyle="rgba(232,119,34,0.7)"; ctx.lineWidth=2;
+      ctx.setLineDash([8,5]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    calCorners.forEach(pt=>{
+      ctx.beginPath(); ctx.arc(pt.x,pt.y,18,0,Math.PI*2);
+      ctx.strokeStyle="rgba(232,119,34,0.9)"; ctx.lineWidth=2.5; ctx.stroke();
+      ctx.beginPath(); ctx.arc(pt.x,pt.y,4,0,Math.PI*2);
+      ctx.fillStyle="#e87722"; ctx.fill();
+    });
+  }
+
+  // Draw fixtures
+  drawFixtures(ctx);
+}
+
+// ═══════════════════════════════════════════
+// SWATCHES & FIXTURES BUILD
+// ═══════════════════════════════════════════
+function buildTileSwatches(){
+  const scroll=document.getElementById("tile-scroll");
+  scroll.innerHTML="";
+  TILES.forEach(tile=>{
+    const chip=document.createElement("div");
+    chip.className="tile-chip"+(tile.id===activeTile.id?" active":"");
+    chip.dataset.id=tile.id;
+    const sw=document.createElement("canvas");
+    sw.className="tile-swatch"; sw.width=50; sw.height=50;
+    drawTilePattern(sw.getContext("2d"),tile,0,0,50,50,1.0);
+    const lbl=document.createElement("div");
+    lbl.className="tile-chip-label"; lbl.textContent=tile.label;
+    chip.appendChild(sw); chip.appendChild(lbl);
+    chip.addEventListener("click",()=>{
+      activeTile=tile;
+      // Update active layer tile
+      const al=layers.find(l=>l.id===activeLayerId);
+      if(al){ al.tile=tile; }
+      document.querySelectorAll(".tile-chip").forEach(c=>c.classList.toggle("active",c.dataset.id===tile.id));
+      render();
+    });
+    scroll.appendChild(chip);
+  });
+}
+
+function buildFixtureSwatches(){
+  const scroll=document.getElementById("fixture-scroll");
+  scroll.innerHTML="";
+  FIXTURES.forEach(fix=>{
+    const chip=document.createElement("div");
+    chip.className="fixture-chip"+(fix.id===activeFixture.id?" active":"");
+    chip.dataset.id=fix.id;
+    const wrap=document.createElement("div"); wrap.className="fixture-icon-wrap";
+    const icon=document.createElement("div"); icon.className="fixture-icon"; icon.textContent=fix.icon;
+    const price=document.createElement("div"); price.className="fixture-price"; price.textContent=fix.price;
+    wrap.appendChild(icon); wrap.appendChild(price);
+    const lbl=document.createElement("div"); lbl.className="fixture-chip-label"; lbl.textContent=fix.label;
+    chip.appendChild(wrap); chip.appendChild(lbl);
+    chip.addEventListener("click",()=>{
+      activeFixture=fix;
+      document.querySelectorAll(".fixture-chip").forEach(c=>c.classList.toggle("active",c.dataset.id===fix.id));
+    });
+    scroll.appendChild(chip);
+  });
+}
+
+// ═══════════════════════════════════════════
+// LAYERS UI
+// ═══════════════════════════════════════════
+function buildLayersUI(){
+  const list=document.getElementById("layers-list");
+  list.innerHTML="";
+  layers.forEach((layer,i)=>{
+    const item=document.createElement("div");
+    item.className="layer-item"+(layer.id===activeLayerId?" active-layer":"");
+    const dot=document.createElement("div"); dot.className="layer-dot";
+    dot.style.background=layer.color;
+    const name=document.createElement("div"); name.className="layer-name"; name.textContent=layer.name;
+    const del=document.createElement("div"); del.className="layer-del"; del.textContent="✕";
+    del.addEventListener("click",e=>{
+      e.stopPropagation();
+      layer.cornerEls.forEach(el=>el.remove());
+      layers.splice(i,1);
+      if(activeLayerId===layer.id) activeLayerId=layers.length?layers[layers.length-1].id:null;
+      buildLayersUI(); render();
+    });
+    item.appendChild(dot); item.appendChild(name); item.appendChild(del);
+    item.addEventListener("click",()=>{
+      activeLayerId=layer.id;
+      activeTile=layer.tile;
+      buildLayersUI(); buildTileSwatches(); render();
+    });
+    list.appendChild(item);
+  });
+}
+
+document.getElementById("add-layer-btn").addEventListener("click",()=>{
+  startNewLayer();
+  setMode("tiles");
+});
+
+// ═══════════════════════════════════════════
+// LAYER MANAGEMENT
+// ═══════════════════════════════════════════
+let layerCounter=0;
+
+function startNewLayer(){
+  calibrating=true;
+  calCorners=[];
+  calCornerEls.forEach(el=>el.remove());
+  calCornerEls=[];
+  layerCounter++;
+  showInstruction(true);
+  document.getElementById("progress").style.display="flex";
+  updateProgress(0);
+}
+
+function finishLayer(){
+  const color=LAYER_COLORS[layers.length % LAYER_COLORS.length];
+  const layer={
+    id: "layer_"+Date.now(),
+    name: "Surface "+(layers.length+1),
+    color,
+    corners: [...calCorners],
+    tile: activeTile,
+    cornerEls: [...calCornerEls],
+  };
+  layers.push(layer);
+  activeLayerId=layer.id;
+  calibrating=false;
+  calCorners=[];
+  calCornerEls=[];
+  showInstruction(false);
+  document.getElementById("progress").style.display="none";
+  buildLayersUI();
+  showToast("✓ Surface calibrated!");
+  render();
+}
+
+function resetActiveLayer(){
+  const layer=layers.find(l=>l.id===activeLayerId);
+  if(layer){
+    layer.cornerEls.forEach(el=>el.remove());
+    layers=layers.filter(l=>l.id!==activeLayerId);
+    activeLayerId=layers.length?layers[layers.length-1].id:null;
+    buildLayersUI();
+  }
+  startNewLayer();
+}
+
+// ═══════════════════════════════════════════
+// INSTRUCTIONS & PROGRESS
+// ═══════════════════════════════════════════
+const HINTS=["Top-left corner","Top-right corner","Bottom-right corner","Bottom-left corner"];
+const ICONS=["👆","↗️","↙️","✅"];
+
+function showInstruction(show){
+  const el=document.getElementById("instruction");
+  el.style.display=show?"block":"none";
+  el.style.opacity=show?"1":"0";
+}
+function updateInstructionStep(n){
+  document.getElementById("instruction-icon").textContent=ICONS[n]||"👆";
+  document.getElementById("instruction-title").textContent=`Tap corner ${n+1} of 4`;
+  document.getElementById("instruction-sub").textContent=HINTS[n]||"";
+}
+function updateProgress(n){
+  for(let i=0;i<4;i++){
+    const d=document.getElementById("pd"+i);
+    if(!d)continue;
+    d.className="prog-dot"+(i<n?" done":i===n?" active":"");
+  }
+}
+
+// ═══════════════════════════════════════════
+// TOUCH HANDLING
+// ═══════════════════════════════════════════
+canvas.addEventListener("pointerdown",e=>{
+  const pt={x:e.clientX,y:e.clientY};
+
+  // ── Fixtures mode: place or drag ──────────
+  if(mode==="fixtures"){
+    // Check drag existing
+    for(let i=placedFixtures.length-1;i>=0;i--){
+      const pf=placedFixtures[i];
+      const s=pf.scale||80;
+      if(Math.hypot(pf.x-pt.x,pf.y-pt.y)<s*.6){ draggingFixture=i; return; }
+    }
+    // Place new
+    placedFixtures.push({fixture:activeFixture, x:pt.x, y:pt.y, scale:80});
+    render();
+    return;
+  }
+
+  // ── Tiles mode: calibration or drag corner ──
+  if(mode==="tiles"||mode==="layers"){
+    if(calibrating){
+      if(calCorners.length<4){
+        calCorners.push(pt);
+        // Place dot
+        const dot=document.createElement("div");
+        dot.className="corner-dot";
+        dot.textContent=(calCorners.length).toString();
+        dot.style.left=pt.x+"px"; dot.style.top=pt.y+"px";
+        document.body.appendChild(dot);
+        calCornerEls.push(dot);
+        updateProgress(calCorners.length);
+        if(calCorners.length<4) updateInstructionStep(calCorners.length);
+        else finishLayer();
+        render();
+      }
+      return;
+    }
+
+    // Drag corner of a calibrated layer
+    for(let li=layers.length-1;li>=0;li--){
+      const layer=layers[li];
+      for(let ci=0;ci<layer.corners.length;ci++){
+        if(Math.hypot(layer.corners[ci].x-pt.x,layer.corners[ci].y-pt.y)<28){
+          draggingCorner={layerId:layer.id,idx:ci};
+          activeLayerId=layer.id;
+          buildLayersUI();
+          return;
+        }
+      }
+    }
+  }
+});
+
+canvas.addEventListener("pointermove",e=>{
+  if(draggingCorner.idx>=0){
+    const layer=layers.find(l=>l.id===draggingCorner.layerId);
+    if(layer){
+      layer.corners[draggingCorner.idx]={x:e.clientX,y:e.clientY};
+      render();
+    }
+    return;
+  }
+  if(draggingFixture!==null&&draggingFixture>=0){
+    placedFixtures[draggingFixture].x=e.clientX;
+    placedFixtures[draggingFixture].y=e.clientY;
+    render();
+  }
+});
+
+canvas.addEventListener("pointerup",()=>{
+  draggingCorner={layerId:null,idx:-1};
+  draggingFixture=null;
+});
+
+// Pinch to resize fixture
+let lastPinchDist=null;
+canvas.addEventListener("touchstart",e=>{
+  if(e.touches.length===2) lastPinchDist=null;
+},{passive:true});
+canvas.addEventListener("touchmove",e=>{
+  if(e.touches.length===2&&draggingFixture!==null&&draggingFixture>=0){
+    const d=Math.hypot(
+      e.touches[0].clientX-e.touches[1].clientX,
+      e.touches[0].clientY-e.touches[1].clientY
+    );
+    if(lastPinchDist){
+      placedFixtures[draggingFixture].scale=Math.max(40,Math.min(200,
+        (placedFixtures[draggingFixture].scale||80)*(d/lastPinchDist)
+      ));
+      render();
+    }
+    lastPinchDist=d;
+  }
+},{passive:true});
+
+// ═══════════════════════════════════════════
+// MODE SWITCHING
+// ═══════════════════════════════════════════
+function setMode(m){
+  mode=m;
+  document.querySelectorAll(".mode-tab").forEach(t=>t.classList.toggle("active",t.dataset.mode===m));
+  document.getElementById("tiles-panel").style.display  = m==="tiles"?"block":"none";
+  document.getElementById("fixtures-panel").style.display = m==="fixtures"?"block":"none";
+  document.getElementById("layers-panel").style.display = m==="layers"?"flex":"none";
+  document.getElementById("progress").style.display = calibrating?"flex":"none";
+  showInstruction(calibrating);
+  if(m==="tiles"&&layers.length===0) startNewLayer();
+}
+
+document.querySelectorAll(".mode-tab").forEach(t=>{
+  t.addEventListener("click",()=>setMode(t.dataset.mode));
+});
+
+// ═══════════════════════════════════════════
+// BASKET
+// ═══════════════════════════════════════════
+function updateBasketUI(){
+  document.getElementById("basket-count").textContent=basket.length;
+  document.getElementById("basket-btn").style.display=basket.length?"block":"none";
+}
+document.getElementById("add-to-basket-tile").addEventListener("click",()=>{
+  basket.push({type:"tile",item:activeTile,label:activeTile.label+" tiles"});
+  updateBasketUI();
+  showToast("Added "+activeTile.label+" to basket");
+});
+document.getElementById("add-to-basket-fixture").addEventListener("click",()=>{
+  basket.push({type:"fixture",item:activeFixture,label:activeFixture.label+" "+activeFixture.price});
+  updateBasketUI();
+  showToast("Added "+activeFixture.label+" to basket");
+});
+
+// ═══════════════════════════════════════════
+// SCREENSHOT
+// ═══════════════════════════════════════════
+document.getElementById("screenshot-btn").addEventListener("click",()=>{
+  const comp=document.createElement("canvas");
+  comp.width=window.innerWidth; comp.height=window.innerHeight;
+  const cctx=comp.getContext("2d");
+  cctx.drawImage(video,0,0,comp.width,comp.height);
+  cctx.drawImage(canvas,0,0);
+  // Watermark
+  cctx.fillStyle="rgba(232,119,34,0.85)";
+  cctx.font="bold 14px 'Outfit',sans-serif";
+  cctx.textAlign="right";
+  cctx.fillText("tilehouse.co.uk",comp.width-14,comp.height-14);
+  comp.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url;
+    a.download="tilehouse-design-"+Date.now()+".jpg"; a.click();
+    URL.revokeObjectURL(url);
+    showToast("📸 Design saved!");
+  },"image/jpeg",.94);
+});
+
+// ═══════════════════════════════════════════
+// RECALIBRATE
+// ═══════════════════════════════════════════
+document.getElementById("recalibrate-btn").addEventListener("click", resetActiveLayer);
+
+// ═══════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════
+document.getElementById("start-btn").addEventListener("click",async()=>{
+  document.getElementById("splash").style.display="none";
+  document.getElementById("ui").style.display="block";
+  video.style.display="block";
+  canvas.style.display="block";
+
+  buildTileSwatches();
+  buildFixtureSwatches();
+  buildLayersUI();
+
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}},
+      audio:false
+    });
+    video.srcObject=stream; await video.play();
+  } catch(e){
+    showToast("Camera access needed — please allow and reload"); return;
+  }
+
+  window.addEventListener("resize",()=>render());
+  setMode("tiles"); // triggers startNewLayer
+
+  function loop(){ render(); requestAnimationFrame(loop); }
+  loop();
+});
+
+document.getElementById("close-btn").addEventListener("click",()=>location.reload());
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2800);
+}
+</script>
+</body>
+</html>
