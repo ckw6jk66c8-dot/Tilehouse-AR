@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>Tile House AR</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --orange: #e87722;
+      --charcoal: #2b2f33;
+      --surface: rgba(30,34,38,0.92);
+      --border: rgba(255,255,255,0.1);
+      --text: #f2f0ed;
+      --muted: rgba(242,240,237,0.55);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      font-family: 'Outfit', sans-serif;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    /* ── Splash screen ── */
+    #splash {
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--charcoal);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0; padding: 40px 32px;
+    }
+    .splash-logo {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 32px;
+    }
+    .splash-logo svg { width: 52px; height: 52px; }
+    .splash-brand { display: flex; flex-direction: column; }
+    .splash-name {
+      font-size: 28px; font-weight: 600; color: var(--orange); letter-spacing: 0.02em;
+    }
+    .splash-tagline {
+      font-size: 11px; font-family: 'DM Mono', monospace;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); margin-top: 2px;
+    }
+    .splash-divider {
+      width: 100%; height: 1px; background: var(--border); margin-bottom: 32px;
+    }
+    .splash-title {
+      font-size: 22px; font-weight: 500; text-align: center;
+      color: var(--text); margin-bottom: 10px; line-height: 1.3;
+    }
+    .splash-sub {
+      font-size: 14px; color: var(--muted); text-align: center;
+      line-height: 1.6; margin-bottom: 36px; max-width: 280px;
+    }
+    .splash-steps {
+      width: 100%; max-width: 300px; margin-bottom: 36px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .step {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--orange); color: #fff;
+      font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-text { font-size: 14px; color: var(--text); line-height: 1.4; }
+
+    #start-btn {
+      width: 100%; max-width: 300px;
+      padding: 16px; background: var(--orange);
+      color: #fff; border: none; border-radius: 10px;
+      font-family: 'Outfit', sans-serif; font-size: 17px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.01em;
+      transition: opacity 0.15s;
+    }
+    #start-btn:active { opacity: 0.85; }
+
+    /* ── AR Canvas ── */
+    #ar-canvas {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      display: none;
+    }
+
+    /* ── Camera fallback (iOS) ── */
+    #camera-video {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+    #canvas-overlay {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      display: none;
+      touch-action: none;
+    }
+
+    /* ── UI overlay ── */
+    #ui {
+      position: fixed; inset: 0; z-index: 10;
+      display: none; pointer-events: none;
+    }
+
+    /* Top bar */
+    .top-bar {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: 52px 20px 16px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
+      display: flex; align-items: center; justify-content: space-between;
+      pointer-events: all;
+    }
+    .top-logo { display: flex; align-items: center; gap: 8px; }
+    .top-logo svg { width: 28px; height: 28px; }
+    .top-logo-name { font-size: 16px; font-weight: 600; color: var(--orange); }
+    #close-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(0,0,0,0.5); border: 1px solid var(--border);
+      color: var(--text); font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Hint banner */
+    #hint {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 22px;
+      text-align: center; pointer-events: none;
+      transition: opacity 0.4s;
+    }
+    #hint-icon { font-size: 32px; margin-bottom: 8px; }
+    #hint-text { font-size: 14px; color: var(--text); line-height: 1.5; }
+
+    /* Bottom tile picker */
+    .bottom-panel {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+      padding: 20px 20px 40px;
+      pointer-events: all;
+    }
+    .panel-label {
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px;
+    }
+    .tile-scroll {
+      display: flex; gap: 10px; overflow-x: auto;
+      padding-bottom: 4px; scrollbar-width: none;
+    }
+    .tile-scroll::-webkit-scrollbar { display: none; }
+    .tile-chip {
+      flex-shrink: 0; display: flex; flex-direction: column;
+      align-items: center; gap: 6px; cursor: pointer;
+      pointer-events: all;
+    }
+    .tile-swatch {
+      width: 56px; height: 56px; border-radius: 8px;
+      border: 2px solid transparent; transition: border-color 0.15s;
+      position: relative; overflow: hidden;
+    }
+    .tile-chip.active .tile-swatch { border-color: var(--orange); }
+    .tile-chip-label {
+      font-size: 10px; color: var(--muted); text-align: center;
+      max-width: 64px; line-height: 1.3;
+    }
+
+    /* Surface toggle */
+    .surface-toggle {
+      display: flex; gap: 8px; margin-bottom: 14px;
+    }
+    .surf-btn {
+      padding: 7px 14px; border-radius: 20px;
+      background: rgba(255,255,255,0.1); border: 1px solid var(--border);
+      color: var(--text); font-family: 'Outfit', sans-serif;
+      font-size: 13px; cursor: pointer; transition: all 0.15s;
+      pointer-events: all;
+    }
+    .surf-btn.active { background: var(--orange); border-color: var(--orange); }
+
+    /* Screenshot btn */
+    #screenshot-btn {
+      position: absolute; bottom: 180px; right: 20px;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); font-size: 22px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: all; transition: all 0.15s;
+    }
+    #screenshot-btn:active { background: var(--orange); }
+
+    /* Toast */
+    #toast {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: var(--surface); border: 1px solid var(--orange);
+      border-radius: 10px; padding: 14px 20px;
+      font-size: 14px; color: var(--text);
+      z-index: 200; opacity: 0; pointer-events: none;
+      transition: all 0.2s; text-align: center;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    /* Mode badge */
+    #mode-badge {
+      position: absolute; top: 110px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 5px 12px;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); pointer-events: none;
+    }
+    .mode-dot {
+      display: inline-block; width: 6px; height: 6px;
+      border-radius: 50%; background: #6abf8a;
+      margin-right: 6px; animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  </style>
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="splash">
+  <div class="splash-logo">
+    <svg viewBox="0 0 52 52" fill="none">
+      <polygon points="26,4 48,22 4,22" fill="#e87722"/>
+      <rect x="34" y="8" width="6" height="10" fill="#e87722"/>
+      <rect x="6" y="22" width="40" height="24" fill="#e87722"/>
+      <line x1="6" y1="33" x2="46" y2="33" stroke="#2b2f33" stroke-width="2.5"/>
+      <line x1="26" y1="22" x2="26" y2="46" stroke="#2b2f33" stroke-width="2.5"/>
+      <line x1="16" y1="22" x2="16" y2="33" stroke="#2b2f33" stroke-width="2"/>
+      <line x1="36" y1="33" x2="36" y2="46" stroke="#2b2f33" stroke-width="2"/>
+    </svg>
+    <div class="splash-brand">
+      <div class="splash-name">Tile House</div>
+      <div class="splash-tagline">Tile & Bathrooms</div>
+    </div>
+  </div>
+  <div class="splash-divider"></div>
+  <div class="splash-title">See tiles in your<br/>actual room</div>
+  <div class="splash-sub">No app download. Point your camera at your floor or wall and see any tile applied instantly.</div>
+  <div class="splash-steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Allow camera access when prompted</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Point at your floor or wall and tap to place tiles</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Choose any tile style and screenshot to save</div>
+    </div>
+  </div>
+  <button id="start-btn">Open AR Camera →</button>
+</div>
+
+<!-- ── CAMERA (iOS fallback) ── -->
+<video id="camera-video" autoplay playsinline muted></video>
+<canvas id="canvas-overlay"></canvas>
+
+<!-- ── WebXR canvas ── -->
+<canvas id="ar-canvas"></canvas>
+
+<!-- ── UI OVERLAY ── -->
+<div id="ui">
+  <div class="top-bar">
+    <div class="top-logo">
+      <svg viewBox="0 0 52 52" fill="none" width="28" height="28">
+        <polygon points="26,4 48,22 4,22" fill="#e87722"/>
+        <rect x="34" y="8" width="6" height="10" fill="#e87722"/>
+        <rect x="6" y="22" width="40" height="24" fill="#e87722"/>
+        <line x1="6" y1="33" x2="46" y2="33" stroke="#2b2f33" stroke-width="2.5"/>
+        <line x1="26" y1="22" x2="26" y2="46" stroke="#2b2f33" stroke-width="2.5"/>
+      </svg>
+      <span class="top-logo-name">Tile House AR</span>
+    </div>
+    <button id="close-btn">✕</button>
+  </div>
+
+  <div id="mode-badge"><span class="mode-dot"></span><span id="mode-text">Detecting surface…</span></div>
+
+  <div id="hint">
+    <div id="hint-icon">📱</div>
+    <div id="hint-text">Move your camera slowly<br/>across the floor or wall</div>
+  </div>
+
+  <button id="screenshot-btn">📸</button>
+
+  <div class="bottom-panel">
+    <div class="surface-toggle">
+      <button class="surf-btn active" data-surface="floor">Floor</button>
+      <button class="surf-btn" data-surface="wall">Wall</button>
+    </div>
+    <div class="panel-label">Choose a tile</div>
+    <div class="tile-scroll" id="tile-scroll"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+// ══════════════════════════════════════════════════════════════════
+// TILE DEFINITIONS
+// ══════════════════════════════════════════════════════════════════
+const TILES = [
+  {
+    id: "concrete-grey",
+    label: "Grey Concrete",
+    color: "#8a8f94",
+    grout: "#5a5e62",
+    gloss: 0.3,
+    pattern: "grid",
+    size: 0.6,
+  },
+  {
+    id: "calacatta",
+    label: "Calacatta",
+    color: "#f0ece4",
+    veins: "#c8b89a",
+    grout: "#d4cfc8",
+    gloss: 0.7,
+    pattern: "marble",
+    size: 0.6,
+  },
+  {
+    id: "charcoal",
+    label: "Charcoal Slate",
+    color: "#3d4045",
+    grout: "#2a2d30",
+    gloss: 0.1,
+    pattern: "grid",
+    size: 0.6,
+  },
+  {
+    id: "white-gloss",
+    label: "White Gloss",
+    color: "#f5f5f3",
+    grout: "#dddbd8",
+    gloss: 0.9,
+    pattern: "brick",
+    size: 0.3,
+  },
+  {
+    id: "terracotta",
+    label: "Terracotta",
+    color: "#c4714a",
+    grout: "#8a4f34",
+    gloss: 0.15,
+    pattern: "grid",
+    size: 0.3,
+  },
+  {
+    id: "wood-oak",
+    label: "Oak Effect",
+    color: "#b8895a",
+    grain: "#9a7248",
+    grout: "#7a5c3a",
+    gloss: 0.2,
+    pattern: "plank",
+    size: 0.2,
+  },
+  {
+    id: "encaustic",
+    label: "Encaustic",
+    color: "#e8e0d4",
+    accent: "#2d5a6b",
+    grout: "#c8c0b4",
+    gloss: 0.1,
+    pattern: "encaustic",
+    size: 0.2,
+  },
+  {
+    id: "nero-black",
+    label: "Nero Black",
+    color: "#1a1c1e",
+    grout: "#111315",
+    gloss: 0.8,
+    pattern: "grid",
+    size: 0.6,
+  },
+];
+
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+let activeTile = TILES[0];
+let activeSurface = "floor";
+let isWebXR = false;
+let placedSurfaces = []; // [{x, y, w, h, tileId, surface}]
+let isDragging = false;
+let dragStart = null;
+let dragCurrent = null;
+let hintHidden = false;
+
+// ══════════════════════════════════════════════════════════════════
+// TILE SWATCHES — draw on mini canvas
+// ══════════════════════════════════════════════════════════════════
+function buildSwatches() {
+  const scroll = document.getElementById("tile-scroll");
+  scroll.innerHTML = "";
+  TILES.forEach(tile => {
+    const chip = document.createElement("div");
+    chip.className = "tile-chip" + (tile.id === activeTile.id ? " active" : "");
+    chip.dataset.id = tile.id;
+
+    const swatch = document.createElement("canvas");
+    swatch.className = "tile-swatch";
+    swatch.width = 56; swatch.height = 56;
+    drawSwatchCanvas(swatch, tile);
+
+    const label = document.createElement("div");
+    label.className = "tile-chip-label";
+    label.textContent = tile.label;
+
+    chip.appendChild(swatch);
+    chip.appendChild(label);
+    chip.addEventListener("click", () => selectTile(tile));
+    scroll.appendChild(chip);
+  });
+}
+
+function drawSwatchCanvas(canvas, tile) {
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  drawTilePattern(ctx, tile, 0, 0, W, H, 1.0);
+}
+
+function selectTile(tile) {
+  activeTile = tile;
+  document.querySelectorAll(".tile-chip").forEach(c => {
+    c.classList.toggle("active", c.dataset.id === tile.id);
+  });
+  renderOverlay();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TILE PATTERN RENDERER (Canvas 2D)
+// ══════════════════════════════════════════════════════════════════
+function drawTilePattern(ctx, tile, x, y, w, h, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+
+  const GROUT = 3;
+  const scale = Math.min(w, h);
+  const tileSize = tile.size * (scale / 1.2);
+
+  if (tile.pattern === "grid" || tile.pattern === "marble") {
+    const cols = Math.ceil(w / tileSize) + 1;
+    const rows = Math.ceil(h / tileSize) + 1;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const tx = x + col * tileSize;
+        const ty = y + row * tileSize;
+        // Grout
+        ctx.fillStyle = tile.grout;
+        ctx.fillRect(tx, ty, tileSize, tileSize);
+        // Tile body
+        ctx.fillStyle = tile.color;
+        ctx.fillRect(tx + GROUT, ty + GROUT, tileSize - GROUT * 2, tileSize - GROUT * 2);
+        // Marble veins
+        if (tile.pattern === "marble" && tile.veins) {
+          ctx.strokeStyle = tile.veins;
+          ctx.lineWidth = 1;
+          ctx.globalAlpha = alpha * 0.4;
+          ctx.beginPath();
+          ctx.moveTo(tx + GROUT + tileSize * 0.1, ty + GROUT + tileSize * 0.2);
+          ctx.bezierCurveTo(
+            tx + tileSize * 0.4, ty + tileSize * 0.5,
+            tx + tileSize * 0.6, ty + tileSize * 0.3,
+            tx + tileSize - GROUT, ty + tileSize - GROUT * 2
+          );
+          ctx.stroke();
+          ctx.globalAlpha = alpha;
+        }
+        // Gloss highlight
+        if (tile.gloss > 0.3) {
+          const g = ctx.createLinearGradient(tx + GROUT, ty + GROUT, tx + tileSize * 0.5, ty + tileSize * 0.4);
+          g.addColorStop(0, `rgba(255,255,255,${tile.gloss * 0.25})`);
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(tx + GROUT, ty + GROUT, tileSize - GROUT * 2, tileSize - GROUT * 2);
+        }
+      }
+    }
+  } else if (tile.pattern === "brick") {
+    const bw = tileSize * 2;
+    const bh = tileSize;
+    const rows = Math.ceil(h / bh) + 1;
+    const cols = Math.ceil(w / bw) + 2;
+    for (let row = 0; row < rows; row++) {
+      const offset = row % 2 === 1 ? bw / 2 : 0;
+      for (let col = -1; col < cols; col++) {
+        const tx = x + col * bw - offset;
+        const ty = y + row * bh;
+        ctx.fillStyle = tile.grout;
+        ctx.fillRect(tx, ty, bw, bh);
+        ctx.fillStyle = tile.color;
+        ctx.fillRect(tx + GROUT, ty + GROUT, bw - GROUT * 2, bh - GROUT * 2);
+        if (tile.gloss > 0.5) {
+          const g = ctx.createLinearGradient(tx, ty, tx + bw * 0.4, ty + bh * 0.4);
+          g.addColorStop(0, `rgba(255,255,255,${tile.gloss * 0.2})`);
+          g.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(tx + GROUT, ty + GROUT, bw - GROUT * 2, bh - GROUT * 2);
+        }
+      }
+    }
+  } else if (tile.pattern === "plank") {
+    const pw = tileSize * 4;
+    const ph = tileSize;
+    const rows = Math.ceil(h / ph) + 1;
+    const cols = Math.ceil(w / pw) + 2;
+    for (let row = 0; row < rows; row++) {
+      const offset = row % 3 * pw / 3;
+      for (let col = -1; col < cols; col++) {
+        const tx = x + col * pw - offset;
+        const ty = y + row * ph;
+        ctx.fillStyle = tile.grout;
+        ctx.fillRect(tx, ty, pw, ph);
+        ctx.fillStyle = tile.color;
+        ctx.fillRect(tx + GROUT, ty + GROUT, pw - GROUT * 2, ph - GROUT * 2);
+        // Wood grain lines
+        if (tile.grain) {
+          ctx.strokeStyle = tile.grain;
+          ctx.lineWidth = 0.8;
+          ctx.globalAlpha = alpha * 0.5;
+          for (let g = 0; g < 3; g++) {
+            ctx.beginPath();
+            const gx = tx + GROUT + (pw - GROUT * 2) * (g + 1) / 4;
+            ctx.moveTo(gx, ty + GROUT);
+            ctx.lineTo(gx + ph * 0.2, ty + ph - GROUT);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = alpha;
+        }
+      }
+    }
+  } else if (tile.pattern === "encaustic") {
+    const s = tileSize;
+    const cols = Math.ceil(w / s) + 1;
+    const rows = Math.ceil(h / s) + 1;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const tx = x + col * s;
+        const ty = y + row * s;
+        ctx.fillStyle = tile.grout;
+        ctx.fillRect(tx, ty, s, s);
+        ctx.fillStyle = tile.color;
+        ctx.fillRect(tx + GROUT, ty + GROUT, s - GROUT * 2, s - GROUT * 2);
+        // Decorative pattern
+        if (tile.accent) {
+          ctx.fillStyle = tile.accent;
+          ctx.globalAlpha = alpha * 0.7;
+          const cx = tx + s / 2;
+          const cy = ty + s / 2;
+          const r = s * 0.25;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+          // Corner diamonds
+          ctx.beginPath();
+          const d = s * 0.12;
+          ctx.moveTo(tx + GROUT + d, ty + GROUT + d);
+          ctx.lineTo(tx + GROUT + d * 2.5, ty + GROUT + d);
+          ctx.lineTo(tx + GROUT + d * 2.5, ty + GROUT + d * 2.5);
+          ctx.lineTo(tx + GROUT + d, ty + GROUT + d * 2.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = alpha;
+        }
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DETECT iOS vs Android
+// ══════════════════════════════════════════════════════════════════
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const supportsWebXR = "xr" in navigator;
+
+// ══════════════════════════════════════════════════════════════════
+// START — decide WebXR or Camera fallback
+// ══════════════════════════════════════════════════════════════════
+document.getElementById("start-btn").addEventListener("click", async () => {
+  document.getElementById("splash").style.display = "none";
+  document.getElementById("ui").style.display = "block";
+  buildSwatches();
+  setupSurfaceToggle();
+  setupScreenshot();
+
+  if (!isIOS && supportsWebXR) {
+    try {
+      const supported = await navigator.xr.isSessionSupported("immersive-ar");
+      if (supported) {
+        startWebXR();
+        return;
+      }
+    } catch(e) {}
+  }
+  // Fallback: camera + canvas overlay
+  startCameraFallback();
+});
+
+// ══════════════════════════════════════════════════════════════════
+// CAMERA FALLBACK (iOS Safari + unsupported browsers)
+// Uses live camera feed + canvas overlay with touch-to-place tiles
+// ══════════════════════════════════════════════════════════════════
+async function startCameraFallback() {
+  document.getElementById("mode-text").textContent = "Touch to place tiles";
+  const video = document.getElementById("camera-video");
+  const canvas = document.getElementById("canvas-overlay");
+  video.style.display = "block";
+  canvas.style.display = "block";
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+  } catch(e) {
+    showToast("Camera access denied. Please allow camera and reload.");
+    return;
+  }
+
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    renderOverlay();
+  }
+  window.addEventListener("resize", resizeCanvas);
+  resizeCanvas();
+
+  // Update hint
+  document.getElementById("hint-icon").textContent = "👆";
+  document.getElementById("hint-text").textContent = "Tap and drag on your floor or wall to place tiles";
+
+  // Touch interaction — tap/drag to draw tile area
+  canvas.addEventListener("pointerdown", e => {
+    isDragging = true;
+    dragStart = { x: e.clientX, y: e.clientY };
+    dragCurrent = { x: e.clientX, y: e.clientY };
+    hideHint();
+  });
+  canvas.addEventListener("pointermove", e => {
+    if (!isDragging) return;
+    dragCurrent = { x: e.clientX, y: e.clientY };
+    renderOverlay();
+  });
+  canvas.addEventListener("pointerup", e => {
+    if (!isDragging) return;
+    isDragging = false;
+    const rect = normaliseRect(dragStart, dragCurrent);
+    if (rect.w > 40 && rect.h > 40) {
+      placedSurfaces.push({ ...rect, tileId: activeTile.id, surface: activeSurface });
+    }
+    dragStart = null;
+    dragCurrent = null;
+    renderOverlay();
+  });
+
+  // Animation loop to keep canvas in sync with video
+  function loop() {
+    renderOverlay();
+    requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+function normaliseRect(a, b) {
+  return {
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    w: Math.abs(a.x - b.x),
+    h: Math.abs(a.y - b.y),
+  };
+}
+
+window.renderOverlay = function renderOverlay() {
+  const canvas = document.getElementById("canvas-overlay");
+  if (!canvas || canvas.style.display === "none") return;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw all placed surfaces
+  placedSurfaces.forEach(s => {
+    const tile = TILES.find(t => t.id === s.tileId) || activeTile;
+    drawTilePattern(ctx, tile, s.x, s.y, s.w, s.h, 0.82);
+    // Border
+    ctx.strokeStyle = "rgba(232,119,34,0.6)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(s.x, s.y, s.w, s.h);
+  });
+
+  // Draw current drag preview
+  if (isDragging && dragStart && dragCurrent) {
+    const r = normaliseRect(dragStart, dragCurrent);
+    drawTilePattern(ctx, activeTile, r.x, r.y, r.w, r.h, 0.65);
+    ctx.strokeStyle = "rgba(232,119,34,0.9)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.setLineDash([]);
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════
+// WebXR path (Android Chrome)
+// Three.js + hit-test for real plane detection
+// ══════════════════════════════════════════════════════════════════
+async function startWebXR() {
+  document.getElementById("mode-text").textContent = "WebXR · Plane detection active";
+  document.getElementById("ar-canvas").style.display = "block";
+  document.getElementById("hint-icon").textContent = "📡";
+  document.getElementById("hint-text").textContent = "Move slowly to detect surfaces,\nthen tap to place tiles";
+
+  // Dynamically load Three.js
+  const THREE = await import("https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js");
+
+  const canvas = document.getElementById("ar-canvas");
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+  // Reticle — shows where tile will be placed
+  const reticleGeo = new THREE.RingGeometry(0.1, 0.11, 32).rotateX(-Math.PI / 2);
+  const reticleMat = new THREE.MeshBasicMaterial({ color: 0xe87722 });
+  const reticle = new THREE.Mesh(reticleGeo, reticleMat);
+  reticle.visible = false;
+  scene.add(reticle);
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+  dirLight.position.set(1, 2, 1);
+  scene.add(dirLight);
+
+  let hitTestSource = null;
+  let hitTestSourceRequested = false;
+  const placedMeshes = [];
+
+  function buildTileMaterial(tile) {
+    // Procedural tile texture via OffscreenCanvas
+    const size = 512;
+    const oc = new OffscreenCanvas(size, size);
+    const octx = oc.getContext("2d");
+    drawTilePattern(octx, tile, 0, 0, size, size, 1.0);
+    const tex = new THREE.CanvasTexture(oc);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(4, 4);
+    return new THREE.MeshStandardMaterial({
+      map: tex,
+      roughness: 1 - tile.gloss,
+      metalness: tile.gloss * 0.1,
+    });
+  }
+
+  function placeTile(position) {
+    const tile = activeTile;
+    const geo = new THREE.PlaneGeometry(0.6, 0.6).rotateX(-Math.PI / 2);
+    const mat = buildTileMaterial(tile);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(position);
+    scene.add(mesh);
+    placedMeshes.push(mesh);
+    hideHint();
+  }
+
+  // Start WebXR session
+  const session = await navigator.xr.requestSession("immersive-ar", {
+    requiredFeatures: ["hit-test"],
+    optionalFeatures: ["dom-overlay"],
+    domOverlay: { root: document.getElementById("ui") },
+  });
+
+  renderer.xr.setReferenceSpaceType("local");
+  await renderer.xr.setSession(session);
+
+  // Tap to place
+  session.addEventListener("select", () => {
+    if (reticle.visible) placeTile(reticle.position);
+  });
+
+  renderer.setAnimationLoop((timestamp, frame) => {
+    if (!frame) return;
+
+    if (!hitTestSourceRequested) {
+      session.requestReferenceSpace("viewer").then(refSpace => {
+        session.requestHitTestSource({ space: refSpace }).then(src => {
+          hitTestSource = src;
+        });
+      });
+      hitTestSourceRequested = true;
+    }
+
+    if (hitTestSource) {
+      const refSpace = renderer.xr.getReferenceSpace();
+      const hits = frame.getHitTestResults(hitTestSource);
+      if (hits.length > 0) {
+        const pose = hits[0].getPose(refSpace);
+        reticle.visible = true;
+        reticle.matrix.fromArray(pose.transform.matrix);
+        reticle.matrix.decompose(reticle.position, reticle.quaternion, reticle.scale);
+        document.getElementById("hint-text").textContent = "Tap to place tiles here";
+      } else {
+        reticle.visible = false;
+      }
+    }
+
+    renderer.render(scene, camera);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SURFACE TOGGLE
+// ══════════════════════════════════════════════════════════════════
+function setupSurfaceToggle() {
+  document.querySelectorAll(".surf-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeSurface = btn.dataset.surface;
+      document.querySelectorAll(".surf-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SCREENSHOT
+// ══════════════════════════════════════════════════════════════════
+function setupScreenshot() {
+  document.getElementById("screenshot-btn").addEventListener("click", () => {
+    const canvas = document.getElementById("canvas-overlay");
+    const video = document.getElementById("camera-video");
+
+    // Composite video + overlay
+    const composite = document.createElement("canvas");
+    composite.width = window.innerWidth;
+    composite.height = window.innerHeight;
+    const ctx = composite.getContext("2d");
+
+    // Draw video frame
+    ctx.drawImage(video, 0, 0, composite.width, composite.height);
+    // Draw tile overlay
+    ctx.drawImage(canvas, 0, 0);
+
+    composite.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tilehouse-ar-" + Date.now() + ".jpg";
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("📸 Saved! Share with your fitter.");
+    }, "image/jpeg", 0.95);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════════
+function hideHint() {
+  if (hintHidden) return;
+  hintHidden = true;
+  const hint = document.getElementById("hint");
+  hint.style.opacity = "0";
+  setTimeout(() => hint.style.display = "none", 400);
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+document.getElementById("close-btn").addEventListener("click", () => {
+  location.reload();
+});
+</script>
+</body>
+</html>
